@@ -11,4 +11,5 @@ export const dataSourceOptions: DataSourceOptions = {
   database: 'bank',
   entities: entitiesList,
   migrations: [join(__dirname, '../migrations/*.{ts,js}')],
+  synchronize: false,
 };
