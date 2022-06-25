@@ -1,4 +1,10 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinTable,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Card } from './card.entity';
 import {
   TransactionOperation,
@@ -15,10 +21,10 @@ export class Transaction {
   @Column({ type: 'int' })
   cardId: number;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', default: null })
   recipientCardId: number;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', default: null })
   transactionIdentifierId: number;
 
   @Column({ type: 'bigint', default: new Date().getTime() })

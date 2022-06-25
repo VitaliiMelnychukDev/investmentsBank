@@ -38,10 +38,12 @@ export class Transaction1655664552905 implements MigrationInterface {
           },
           {
             name: recipientCardIdColumn,
+            isNullable: true,
             type: 'int',
           },
           {
             name: 'transactionIdentifierId',
+            isNullable: true,
             type: 'int',
           },
           {

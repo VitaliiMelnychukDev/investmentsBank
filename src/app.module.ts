@@ -14,6 +14,7 @@ import { CartCodeController } from './controllers/cart-code.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from './config/data-source.config';
 import { entitiesList } from './types/general';
+import { TransactionService } from './services/transaction.service';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { entitiesList } from './types/general';
     TokenService,
     PaginationService,
     CardCodeService,
+    TransactionService,
   ],
 })
 export class AppModule {}

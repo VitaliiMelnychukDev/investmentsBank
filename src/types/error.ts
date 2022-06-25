@@ -15,10 +15,18 @@ export enum CardError {
   GetCardBalanceFail = 'GetCardBalanceFail',
   GetCardsFail = 'GetCardsFail',
   NotEnoughMoney = 'NotEnoughMoney',
+  DepositFail = 'DepositFail',
+  WithdrawFail = 'WithdrawFail',
+  TransferMoneyFail = 'TransferMoneyFail',
 }
 
 export enum CardCodeError {
   CreateCardCodeFail = 'CreateCardCodeFail',
   MaxExpirationHoursExceeded = 'MaxExpirationHoursExceeded',
   GetCardCodesFail = 'GetCardCodesFail',
+}
+
+export enum TransactionError {
+  SaveTransactionFail = 'SaveTransactionFail',
+  GetTransactionsFail = 'GetTransactionsFail',
 }

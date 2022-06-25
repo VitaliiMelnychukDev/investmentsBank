@@ -79,6 +79,9 @@ export class CardCodeService {
           }),
         },
         relations: ['card'],
+        order: {
+          id: 'DESC',
+        },
       });
 
       return cardCodes.map((cardCode: CardCode) =>
@@ -90,8 +93,6 @@ export class CardCodeService {
   }
 
   private buildCardCodesResult(cardCode: CardCode): IGetCardCode {
-    console.log(cardCode.expiredAt);
-    console.log(new Date());
     return {
       code: cardCode.code,
       limit: cardCode.limit,

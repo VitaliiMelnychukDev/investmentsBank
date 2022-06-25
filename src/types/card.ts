@@ -1,4 +1,6 @@
 import { IShortAccount } from './account';
+import { TransactionOperation } from './transaction';
+import { CardError } from './error';
 
 export interface ICardDetails {
   cardNumber: string;
@@ -22,4 +24,16 @@ export interface IGetUserCards extends IGetCardsSharedInfo {
 export interface IGetBankCards extends IGetCardsSharedInfo {
   blocked: boolean;
   userAccount: IShortAccount;
+}
+
+export interface IChangeBalance {
+  accountId: number;
+  cardNumber: string;
+  recipientCardNumber?: string;
+  amount: number;
+  operation: TransactionOperation;
+  message:
+    | CardError.DepositFail
+    | CardError.WithdrawFail
+    | CardError.TransferMoneyFail;
 }

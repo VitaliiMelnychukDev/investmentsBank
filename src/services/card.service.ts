@@ -3,6 +3,7 @@ import { AccountService } from './account.service';
 import { CardError } from '../types/error';
 import {
   ICardDetails,
+  IChangeBalance,
   IGetBankCards,
   IGetCardsSharedInfo,
   IGetUserCards,
@@ -11,11 +12,15 @@ import { RandomHelper } from '../helpers/random.helper';
 import { PaginationService } from './pagination.service';
 import { AccountRole } from '../types/account';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Like, Repository } from 'typeorm';
+import { DataSource, FindOptionsWhere, Like, Repository } from 'typeorm';
 import { Card } from '../entities/card.entity';
 import { Account } from '../entities/account.entity';
 import { PaginationDto } from '../dtos/shared/pagination.dto';
 import { GetCardsDto } from '../dtos/bank/get-cards.dto';
+import { TransactionOperation, TransactionStatus } from '../types/transaction';
+import { Transaction } from '../entities/transaction.entity';
+import { TransactionService } from './transaction.service';
+import { TransferMoneyDto } from '../dtos/card/transfer-money.dto';
 
 @Injectable()
 export class CardService {
@@ -25,6 +30,8 @@ export class CardService {
     @InjectRepository(Card) private cardRepository: Repository<Card>,
     private accountService: AccountService,
     private paginationService: PaginationService,
+    private dataSource: DataSource,
+    private transactionService: TransactionService,
   ) {}
 
   public async getUserCards(
@@ -140,6 +147,110 @@ export class CardService {
     }
   }
 
+  public async changeCardBalance({
+    accountId,
+    cardNumber,
+    amount,
+    operation,
+    recipientCardNumber,
+    message,
+  }: IChangeBalance): Promise<void> {
+    if (
+      operation === TransactionOperation.Transfer &&
+      (!recipientCardNumber || recipientCardNumber === cardNumber)
+    ) {
+      throw new BadRequestException(message);
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction('REPEATABLE READ');
+
+    let card: Card | null = null;
+    let recipientCard: Card | null = null;
+
+    const cardRepository = queryRunner.manager.getRepository(Card);
+
+    try {
+      card = await cardRepository.findOne({
+        where: {
+          cardNumber: cardNumber,
+        },
+        lock: { mode: 'for_no_key_update' },
+      });
+
+      if (operation === TransactionOperation.Transfer) {
+        recipientCard = await cardRepository.findOne({
+          where: {
+            cardNumber: recipientCardNumber,
+          },
+        });
+      }
+    } catch (e) {
+      await queryRunner.rollbackTransaction();
+
+      await queryRunner.release();
+
+      throw new BadRequestException(message);
+    }
+
+    if (
+      !card ||
+      (card.accountId !== accountId && card.bankAccountId !== accountId) ||
+      (operation === TransactionOperation.Transfer && !recipientCard)
+    ) {
+      await queryRunner.release();
+
+      throw new BadRequestException(message);
+    }
+
+    if (operation !== TransactionOperation.Deposit && card.balance < amount) {
+      await queryRunner.release();
+
+      throw new BadRequestException(CardError.NotEnoughMoney);
+    }
+
+    try {
+      const newBalance =
+        operation === TransactionOperation.Deposit
+          ? card.balance + amount
+          : card.balance - amount;
+
+      await cardRepository.update(
+        { cardNumber: cardNumber },
+        { balance: newBalance },
+      );
+
+      if (operation === TransactionOperation.Transfer) {
+        await cardRepository.update(
+          { cardNumber: recipientCardNumber },
+          { balance: recipientCard?.balance + amount },
+        );
+      }
+
+      const transaction: Transaction = new Transaction();
+      transaction.cardId = card.id;
+      transaction.amount = amount;
+      transaction.operation = operation;
+      transaction.status = TransactionStatus.Succeed;
+
+      if (operation === TransactionOperation.Transfer) {
+        transaction.recipientCardId = recipientCard?.id;
+      }
+      await this.transactionService.add(transaction);
+
+      await queryRunner.commitTransaction();
+
+      await queryRunner.release();
+    } catch (e) {
+      await queryRunner.rollbackTransaction();
+
+      await queryRunner.release();
+
+      throw new BadRequestException(message);
+    }
+  }
+
   public async getCard(
     cardNumber: string,
     errorMessage: string,
@@ -199,6 +310,9 @@ export class CardService {
         ...this.paginationService.getPaginationParams(getCardParams),
         where: whereOptions,
         relations: bankSearch ? ['account'] : ['bankAccount'],
+        order: {
+          cardNumber: 'ASC',
+        },
       });
     } catch (e) {
       throw new BadRequestException(CardError.GetCardsFail);

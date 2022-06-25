@@ -20,6 +20,8 @@ import { IGetUserCards } from '../types/card';
 import { CardCodeService } from '../services/card-code.service';
 import { GetCardCodesDto } from '../dtos/shared/get-card-codes.dto';
 import { IGetCardCode } from '../types/card-code';
+import { GetTransactionsDto } from '../dtos/shared/get-transactions.dto';
+import { TransactionService } from '../services/transaction.service';
 
 @Controller('account')
 export class AccountController {
@@ -27,6 +29,7 @@ export class AccountController {
     private accountService: AccountService,
     private cardService: CardService,
     private cardCodeService: CardCodeService,
+    private transactionsService: TransactionService,
   ) {}
 
   @Post('add')
@@ -64,5 +67,17 @@ export class AccountController {
         getCardCodeParams,
       ),
     };
+  }
+  @AuthNeeded()
+  @Roles(AccountRole.User)
+  @Get('get-transactions')
+  getTransactions(
+    @Query(new ValidationPipe()) getTransactionsParams: GetTransactionsDto,
+    @Req() request: IAuthorizedRequest,
+  ): Promise<any> {
+    return this.transactionsService.get(
+      request.account.accountId,
+      getTransactionsParams,
+    );
   }
 }
