@@ -1,6 +1,7 @@
 import { IShortAccount } from './account';
 import { TransactionOperation } from './transaction';
 import { CardError } from './error';
+import { Transaction } from '../entities/transaction.entity';
 
 export interface ICardDetails {
   cardNumber: string;
@@ -36,4 +37,5 @@ export interface IChangeBalance {
     | CardError.DepositFail
     | CardError.WithdrawFail
     | CardError.TransferMoneyFail;
+  transactionIdentifierId?: number;
 }

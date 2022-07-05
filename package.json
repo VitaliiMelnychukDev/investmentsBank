@@ -33,6 +33,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.13.2",
     "jsonwebtoken": "^8.5.1",
+    "kafkajs": "^2.1.0",
     "mongoose": "^6.3.5",
     "pg": "^8.7.3",
     "rand-token": "^1.0.1",

@@ -15,6 +15,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from './config/data-source.config';
 import { entitiesList } from './types/general';
 import { TransactionService } from './services/transaction.service';
+import { ConsumerService } from './services/consumer.service';
+import { ProducerService } from './services/producer.service';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { TransactionService } from './services/transaction.service';
       provide: APP_GUARD,
       useClass: RolesGuard,
     },
+    ConsumerService,
+    ProducerService,
     AccountService,
     CardService,
     TokenService,

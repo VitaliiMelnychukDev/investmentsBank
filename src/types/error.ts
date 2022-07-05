@@ -10,7 +10,7 @@ export enum AccountError {
 
 export enum CardError {
   CreateCardFail = 'CreateCardFail',
-  CartWasNotFound = 'CartWasNotFound',
+  CardWasNotFound = 'CardWasNotFound',
   CardActivationFail = 'CardActivationFail',
   GetCardBalanceFail = 'GetCardBalanceFail',
   GetCardsFail = 'GetCardsFail',
@@ -28,5 +28,5 @@ export enum CardCodeError {
 
 export enum TransactionError {
   SaveTransactionFail = 'SaveTransactionFail',
-  GetTransactionsFail = 'GetTransactionsFail',
+  GetTransactionByIdentifierFail = 'GetTransactionByIdentifierFail',
 }

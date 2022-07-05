@@ -28,7 +28,7 @@ export class CardController {
   constructor(private cardService: CardService) {}
 
   @AuthNeeded()
-  @Roles(AccountRole.User, AccountRole.Bank)
+  @Roles(AccountRole.User, AccountRole.Bank, AccountRole.Company)
   @Get('get-balance')
   public async getBalance(
     @Query(new ValidationPipe()) getBalanceParas: CardNumberDto,
@@ -69,7 +69,7 @@ export class CardController {
     @Req() request: IAuthorizedRequest,
   ): Promise<IResponse<ICardDetails>> {
     const cardDetails: ICardDetails = await this.cardService.createCard(
-      createBody.userId,
+      createBody.accountId,
       request.account.accountId,
     );
 
@@ -97,7 +97,7 @@ export class CardController {
   }
 
   @AuthNeeded()
-  @Roles(AccountRole.User, AccountRole.Bank)
+  @Roles(AccountRole.User, AccountRole.Company, AccountRole.Bank)
   @Post('deposit')
   public async deposit(
     @Body(new ValidationPipe()) depositBody: ChangeBalanceDto,
@@ -115,7 +115,7 @@ export class CardController {
   }
 
   @AuthNeeded()
-  @Roles(AccountRole.User, AccountRole.Bank)
+  @Roles(AccountRole.User, AccountRole.Company, AccountRole.Bank)
   @Post('withdraw')
   public async withdraw(
     @Body(new ValidationPipe()) withdrawBody: ChangeBalanceDto,
@@ -134,7 +134,7 @@ export class CardController {
   }
 
   @AuthNeeded()
-  @Roles(AccountRole.User, AccountRole.Bank)
+  @Roles(AccountRole.User, AccountRole.Company, AccountRole.Bank)
   @Post('transfer')
   public async transfer(
     @Body(new ValidationPipe()) transferBody: TransferMoneyDto,

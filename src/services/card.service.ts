@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { AccountService } from './account.service';
 import { CardError } from '../types/error';
 import {
@@ -20,10 +20,12 @@ import { GetCardsDto } from '../dtos/bank/get-cards.dto';
 import { TransactionOperation, TransactionStatus } from '../types/transaction';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionService } from './transaction.service';
-import { TransferMoneyDto } from '../dtos/card/transfer-money.dto';
+import { ConsumerService } from './consumer.service';
+import { IBankCardsToCheck, ITransaction, Topic } from '../types/kafka';
+import { ProducerService } from './producer.service';
 
 @Injectable()
-export class CardService {
+export class CardService implements OnModuleInit {
   private readonly expirationMonth = 20;
 
   constructor(
@@ -32,7 +34,87 @@ export class CardService {
     private paginationService: PaginationService,
     private dataSource: DataSource,
     private transactionService: TransactionService,
+    private consumerService: ConsumerService,
+    private producerService: ProducerService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.addBankCardsToCheckConsumer();
+    await this.addTransactionConsumer();
+  }
+
+  private async addBankCardsToCheckConsumer(): Promise<void> {
+    await this.consumerService.addConsumer(Topic.BankCardsToCheck, {
+      eachMessage: async ({ message }): Promise<void> => {
+        try {
+          const bankCardToCheck: IBankCardsToCheck =
+            this.consumerService.getMessageBody<IBankCardsToCheck>(message);
+
+          const card: Card = await this.getCard(
+            bankCardToCheck.cardNumber,
+            CardError.CardWasNotFound,
+          );
+
+          if (card.accountId === bankCardToCheck.accountId) {
+            await this.producerService.sendMessage(
+              Topic.BankCardsCheckResponse,
+              card.cardNumber,
+              {
+                ...bankCardToCheck,
+                valid: true,
+              },
+            );
+          }
+        } catch {
+          console.log('Check User Fail');
+        }
+      },
+    });
+  }
+
+  private async addTransactionConsumer(): Promise<void> {
+    await this.consumerService.addConsumer(Topic.Transactions, {
+      eachMessage: async ({ message }): Promise<void> => {
+        const transaction: ITransaction =
+          this.consumerService.getMessageBody<ITransaction>(message);
+
+        try {
+          const card: Card = await this.getCard(
+            transaction.cardNumber,
+            CardError.CardWasNotFound,
+          );
+
+          if (
+            card.cvv === transaction.cvv &&
+            card.expiredAtMonth === transaction.expirationMonth &&
+            card.expiredAtYear === transaction.expirationYear
+          ) {
+            await this.changeCardBalance({
+              accountId: card.accountId,
+              cardNumber: card.cardNumber,
+              recipientCardNumber: transaction.receiverCardNumber,
+              amount: transaction.amount,
+              operation: TransactionOperation.Transfer,
+              message: CardError.TransferMoneyFail,
+              transactionIdentifierId: transaction.identifierId,
+            });
+          } else {
+            throw new BadRequestException(CardError.TransferMoneyFail);
+          }
+        } catch {
+          await this.producerService.sendMessage(
+            Topic.TransactionsStatus,
+            transaction.cardNumber,
+            {
+              transactionIdentifierId: transaction.identifierId,
+              succeed: false,
+            },
+          );
+          console.log('Handle Transaction Fail');
+        }
+      },
+    });
+  }
 
   public async getUserCards(
     accountId: number,
@@ -99,7 +181,8 @@ export class CardService {
     );
 
     if (
-      account.role !== AccountRole.User ||
+      (account.role !== AccountRole.User &&
+        account.role !== AccountRole.Company) ||
       bankAccount.role !== AccountRole.Bank
     ) {
       throw new BadRequestException(CardError.CreateCardFail);
@@ -154,12 +237,25 @@ export class CardService {
     operation,
     recipientCardNumber,
     message,
+    transactionIdentifierId,
   }: IChangeBalance): Promise<void> {
     if (
       operation === TransactionOperation.Transfer &&
       (!recipientCardNumber || recipientCardNumber === cardNumber)
     ) {
       throw new BadRequestException(message);
+    }
+
+    if (transactionIdentifierId) {
+      const transaction: Transaction | null =
+        await this.transactionService.getByIdentifierId(
+          transactionIdentifierId,
+          message,
+        );
+
+      if (transaction) {
+        throw new BadRequestException(message);
+      }
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -237,7 +333,22 @@ export class CardService {
       if (operation === TransactionOperation.Transfer) {
         transaction.recipientCardId = recipientCard?.id;
       }
+      if (transactionIdentifierId) {
+        transaction.transactionIdentifierId = transactionIdentifierId;
+      }
+
       await this.transactionService.add(transaction);
+
+      if (transactionIdentifierId) {
+        await this.producerService.sendMessage(
+          Topic.TransactionsStatus,
+          accountId,
+          {
+            transactionIdentifierId,
+            succeed: true,
+          },
+        );
+      }
 
       await queryRunner.commitTransaction();
 
@@ -352,7 +463,7 @@ export class CardService {
       try {
         await this.getCard(
           randomCardNumber,
-          CardError.CartWasNotFound,
+          CardError.CardWasNotFound,
           false,
           false,
         );

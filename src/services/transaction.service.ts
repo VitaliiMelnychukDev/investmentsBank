@@ -30,4 +30,19 @@ export class TransactionService {
       throw new BadRequestException(TransactionError.SaveTransactionFail);
     }
   }
+
+  public async getByIdentifierId(
+    identifierId: number,
+    errorMessage: string,
+  ): Promise<Transaction | null> {
+    try {
+      return this.transactionRepository.findOne({
+        where: {
+          transactionIdentifierId: identifierId,
+        },
+      });
+    } catch {
+      throw new BadRequestException(errorMessage);
+    }
+  }
 }

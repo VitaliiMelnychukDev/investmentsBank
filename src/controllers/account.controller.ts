@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  Req,
-  ValidationPipe,
-} from '@nestjs/common';
-import { AddAccountDto } from '../dtos/account/add.dto';
+import { Controller, Get, Query, Req, ValidationPipe } from '@nestjs/common';
 import { AccountService } from '../services/account.service';
 import { AuthNeeded } from '../decorators/auth.decorator';
 import { AccountRole } from '../types/account';
@@ -32,15 +23,8 @@ export class AccountController {
     private transactionsService: TransactionService,
   ) {}
 
-  @Post('add')
-  public async add(
-    @Body(new ValidationPipe()) addBody: AddAccountDto,
-  ): Promise<void> {
-    await this.accountService.addAccount(addBody);
-  }
-
   @AuthNeeded()
-  @Roles(AccountRole.User)
+  @Roles(AccountRole.User, AccountRole.Company)
   @Get('get-cards')
   public async getCards(
     @Query(new ValidationPipe()) getCardsParams: PaginationDto,
@@ -55,7 +39,7 @@ export class AccountController {
   }
 
   @AuthNeeded()
-  @Roles(AccountRole.User)
+  @Roles(AccountRole.User, AccountRole.Company)
   @Get('get-card-codes')
   public async getCardCodes(
     @Query(new ValidationPipe()) getCardCodeParams: GetCardCodesDto,
@@ -69,7 +53,7 @@ export class AccountController {
     };
   }
   @AuthNeeded()
-  @Roles(AccountRole.User)
+  @Roles(AccountRole.User, AccountRole.Company)
   @Get('get-transactions')
   getTransactions(
     @Query(new ValidationPipe()) getTransactionsParams: GetTransactionsDto,

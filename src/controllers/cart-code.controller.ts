@@ -13,7 +13,7 @@ export class CartCodeController {
   constructor(private cardCodeService: CardCodeService) {}
 
   @AuthNeeded()
-  @Roles(AccountRole.User, AccountRole.Bank)
+  @Roles(AccountRole.User, AccountRole.Company, AccountRole.Bank)
   @Post()
   public async create(
     @Body(new ValidationPipe()) createBody: CreateDto,

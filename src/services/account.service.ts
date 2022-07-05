@@ -1,24 +1,38 @@
-import { AddAccountDto } from '../dtos/account/add.dto';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { Account } from '../entities/account.entity';
 import { AccountError } from '../types/error';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConsumerService } from './consumer.service';
+import { Topic } from '../types/kafka';
+import { AccountData } from '../types/account';
 
 @Injectable()
-export class AccountService {
+export class AccountService implements OnModuleInit {
   constructor(
     @InjectRepository(Account)
     private accountRepository: Repository<Account>,
+    private consumerService: ConsumerService,
   ) {}
-  public async addAccount(account: AddAccountDto): Promise<void> {
+
+  async onModuleInit(): Promise<void> {
+    await this.consumerService.addConsumer(Topic.Accounts, {
+      eachMessage: async ({ message }): Promise<void> => {
+        const accountData: AccountData =
+          this.consumerService.getMessageBody<AccountData>(message);
+        await this.addAccount(accountData);
+      },
+    });
+  }
+
+  private async addAccount(account: AccountData): Promise<void> {
     let existedAccount: Account | null = null;
 
     try {
       existedAccount = await this.accountRepository.findOne({
         where: [
           {
-            id: account.accountId,
+            id: account.id,
           },
           {
             email: account.email,
@@ -34,7 +48,7 @@ export class AccountService {
     }
 
     const newAccount = new Account();
-    newAccount.id = account.accountId;
+    newAccount.id = account.id;
     newAccount.email = account.email;
     newAccount.name = account.name;
     newAccount.role = account.role;
