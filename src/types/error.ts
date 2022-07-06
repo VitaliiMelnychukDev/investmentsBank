@@ -18,6 +18,7 @@ export enum CardError {
   DepositFail = 'DepositFail',
   WithdrawFail = 'WithdrawFail',
   TransferMoneyFail = 'TransferMoneyFail',
+  CardCodeNotValid = 'CardCodeNotValid',
 }
 
 export enum CardCodeError {

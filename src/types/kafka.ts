@@ -3,6 +3,7 @@ export enum Topic {
   BankCardsToCheck = 'bank-cards-to-check',
   BankCardsCheckResponse = 'bank-cards-check-response',
   Transactions = 'transactions',
+  CodeTransactions = 'code-transactions',
   TransactionsStatus = 'transactions-status',
 }
 
@@ -13,14 +14,21 @@ export interface IBankCardsToCheck {
   cardNumber: string;
 }
 
-export interface ITransaction {
+interface ITransactionBase {
+  receiverCardNumber: string;
+  amount: number;
+  identifierId: number;
+}
+
+export interface ITransaction extends ITransactionBase {
   cardNumber: string;
   cvv: number;
   expirationYear: number;
   expirationMonth: number;
-  receiverCardNumber: string;
-  amount: number;
-  identifierId: number;
+}
+
+export interface ICodeTransaction extends ITransactionBase {
+  cardCode: string;
 }
 
 export type acks = 1 | 0 | -1;

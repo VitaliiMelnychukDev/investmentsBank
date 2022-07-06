@@ -33,6 +33,7 @@ export interface IChangeBalance {
   recipientCardNumber?: string;
   amount: number;
   operation: TransactionOperation;
+  cardCode?: string;
   message:
     | CardError.DepositFail
     | CardError.WithdrawFail

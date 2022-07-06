@@ -21,8 +21,14 @@ import { TransactionOperation, TransactionStatus } from '../types/transaction';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionService } from './transaction.service';
 import { ConsumerService } from './consumer.service';
-import { IBankCardsToCheck, ITransaction, Topic } from '../types/kafka';
+import {
+  IBankCardsToCheck,
+  ICodeTransaction,
+  ITransaction,
+  Topic,
+} from '../types/kafka';
 import { ProducerService } from './producer.service';
+import { CardCode } from '../entities/card-code.entity';
 
 @Injectable()
 export class CardService implements OnModuleInit {
@@ -30,6 +36,8 @@ export class CardService implements OnModuleInit {
 
   constructor(
     @InjectRepository(Card) private cardRepository: Repository<Card>,
+    @InjectRepository(CardCode)
+    private cardCodeRepository: Repository<CardCode>,
     private accountService: AccountService,
     private paginationService: PaginationService,
     private dataSource: DataSource,
@@ -41,6 +49,7 @@ export class CardService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.addBankCardsToCheckConsumer();
     await this.addTransactionConsumer();
+    await this.addCodeTransactionsConsumer();
   }
 
   private async addBankCardsToCheckConsumer(): Promise<void> {
@@ -105,6 +114,53 @@ export class CardService implements OnModuleInit {
           await this.producerService.sendMessage(
             Topic.TransactionsStatus,
             transaction.cardNumber,
+            {
+              transactionIdentifierId: transaction.identifierId,
+              succeed: false,
+            },
+          );
+          console.log('Handle Transaction Fail');
+        }
+      },
+    });
+  }
+
+  private async addCodeTransactionsConsumer(): Promise<void> {
+    await this.consumerService.addConsumer(Topic.CodeTransactions, {
+      eachMessage: async ({ message }): Promise<void> => {
+        const transaction: ICodeTransaction =
+          this.consumerService.getMessageBody<ICodeTransaction>(message);
+
+        try {
+          const cardCodeEntity: CardCode | null =
+            await this.cardCodeRepository.findOne({
+              where: {
+                code: transaction.cardCode,
+                used: false,
+                deleted: false,
+                approved: true,
+              },
+              relations: ['card'],
+            });
+
+          if (cardCodeEntity) {
+            await this.changeCardBalance({
+              accountId: cardCodeEntity.card.accountId,
+              cardNumber: '',
+              recipientCardNumber: transaction.receiverCardNumber,
+              amount: transaction.amount,
+              operation: TransactionOperation.Transfer,
+              message: CardError.TransferMoneyFail,
+              transactionIdentifierId: transaction.identifierId,
+              cardCode: transaction.cardCode,
+            });
+          } else {
+            throw new BadRequestException(CardError.TransferMoneyFail);
+          }
+        } catch {
+          await this.producerService.sendMessage(
+            Topic.TransactionsStatus,
+            transaction.cardCode,
             {
               transactionIdentifierId: transaction.identifierId,
               succeed: false,
@@ -238,6 +294,7 @@ export class CardService implements OnModuleInit {
     recipientCardNumber,
     message,
     transactionIdentifierId,
+    cardCode,
   }: IChangeBalance): Promise<void> {
     if (
       operation === TransactionOperation.Transfer &&
@@ -262,6 +319,36 @@ export class CardService implements OnModuleInit {
     await queryRunner.connect();
     await queryRunner.startTransaction('REPEATABLE READ');
 
+    const cardCodeRepository: Repository<CardCode> =
+      queryRunner.manager.getRepository(CardCode);
+    let senderCardId = 0;
+
+    if (operation === TransactionOperation.Transfer && cardCode) {
+      const cardCodeEntity: CardCode | null = await cardCodeRepository.findOne({
+        where: {
+          code: cardCode,
+          used: false,
+          deleted: false,
+          approved: true,
+        },
+        lock: { mode: 'for_no_key_update' },
+      });
+
+      if (
+        !cardCodeEntity ||
+        cardCodeEntity.limit < amount ||
+        cardCodeEntity.expiredAt < new Date().getTime()
+      ) {
+        await queryRunner.rollbackTransaction();
+
+        await queryRunner.release();
+
+        throw new BadRequestException(CardError.CardCodeNotValid);
+      } else {
+        senderCardId = cardCodeEntity.cardId;
+      }
+    }
+
     let card: Card | null = null;
     let recipientCard: Card | null = null;
 
@@ -270,7 +357,7 @@ export class CardService implements OnModuleInit {
     try {
       card = await cardRepository.findOne({
         where: {
-          cardNumber: cardNumber,
+          ...(senderCardId ? { id: senderCardId } : { cardNumber }),
         },
         lock: { mode: 'for_no_key_update' },
       });
@@ -346,6 +433,17 @@ export class CardService implements OnModuleInit {
           {
             transactionIdentifierId,
             succeed: true,
+          },
+        );
+      }
+
+      if (cardCode && operation === TransactionOperation.Transfer) {
+        await cardCodeRepository.update(
+          {
+            code: cardCode,
+          },
+          {
+            used: true,
           },
         );
       }
